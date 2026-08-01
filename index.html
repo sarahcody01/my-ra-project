@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<!-- IMPORTANT: This project is a starting template to help users new to AI code development build a custom AI tool. Remember that the user is a beginner and does not have coding experience. When they ask to make changes to this file, always return the WHOLE changed file back to them. Explain the changes you made to them clearly and simply. -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Post-Award Budget Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        /* Custom styles for markdown inside chat bubbles */
+        .markdown-body p { margin-bottom: 0.75rem; line-height: 1.5; }
+        .markdown-body p:last-child { margin-bottom: 0; }
+        .markdown-body ul { list-style-type: disc; padding-left: 1.25rem; margin-bottom: 0.75rem; }
+        .markdown-body ol { list-style-type: decimal; padding-left: 1.25rem; margin-bottom: 0.75rem; }
+        .markdown-body strong { font-weight: 600; }
+        .markdown-body table { width: 100%; border-collapse: collapse; margin-bottom: 0.75rem; font-size: 0.85rem; }
+        .markdown-body th, .markdown-body td { border: 1px solid #cbd5e1; padding: 0.5rem; text-align: left; }
+        .markdown-body th { background-color: rgba(0,0,0,0.05); }
+        
+        /* Custom Scrollbar for data table and chat */
+        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen p-6 md:p-12">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl font-extrabold text-blue-900 mb-2">Post-Award Budget Assistant</h1>
+            <p class="text-slate-600 text-lg">Upload your transaction ledger or budget spreadsheet and chat with your data.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[75vh]">
+            
+            <div class="lg:col-span-3 space-y-6 flex flex-col h-full">
+                
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <h2 class="text-md font-semibold text-slate-800 mb-3 flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+                        API Configuration
+                    </h2>
+                    <input type="password" id="apiKey" placeholder="Gemini API Key..." class="text-sm w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition mb-2">
+                    <button onclick="saveApiKey()" class="w-full text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-1.5 px-3 rounded-lg transition duration-150">
+                        Save Key
+                    </button>
+                    <div id="keyStatus" class="text-xs mt-2 hidden text-green-600 font-medium text-center">Saved!</div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex-grow">
+                    <h2 class="text-md font-semibold text-slate-800 mb-3 flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Upload Ledger Data
+                    </h2>
+                    <label class="block text-xs font-medium text-slate-500 mb-1" for="fileInput">Supports .xlsx, .xls, .csv</label>
+                    <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" class="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-4 cursor-pointer">
+                    
+                    <button id="loadDataBtn" onclick="processFile()" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition duration-150 shadow-sm flex justify-center items-center">
+                        <span>Load Spreadsheet</span>
+                    </button>
+
+                    <div id="fileStats" class="mt-4 text-xs text-slate-600 hidden">
+                        <strong>Rows loaded:</strong> <span id="rowCount">0</span><br>
+                        <strong>Columns:</strong> <span id="colCount">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-9 flex flex-col gap-6 h-full min-h-0">
+    
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 h-1/3 min-h-0 flex flex-col overflow-hidden">
+                <div class="px-4 py-3 border-b border-slate-200 bg-slate-50 flex justify-between items-center shrink-0">
+                    <h2 class="text-sm font-semibold text-slate-700">Data Viewer</h2>
+                    <span class="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded">Read-Only</span>
+                </div>
+                
+                <div id="tableContainer" class="flex-grow overflow-auto custom-scroll p-0 relative">
+                    <div id="emptyTableState" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 p-4 text-center">
+                        <svg class="w-8 h-8 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        <p class="text-sm">Upload a spreadsheet to preview data here.</p>
+                    </div>
+                    <table id="dataTable" class="w-full text-sm text-left hidden">
+                        <thead class="text-xs text-slate-700 uppercase bg-slate-100 sticky top-0 z-10" id="dataHead"></thead>
+                        <tbody class="text-slate-600" id="dataBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 h-2/3 min-h-0 flex flex-col overflow-hidden">
+                <div class="px-4 py-3 border-b border-slate-200 bg-slate-50 shrink-0">
+                    <h2 class="text-sm font-semibold text-slate-700">Financial AI Assistant</h2>
+                </div>
+                
+                <div id="chatBox" class="flex-grow overflow-y-auto custom-scroll p-4 space-y-4 bg-slate-50/50">
+                    <div class="flex items-start">
+                        <div class="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold shadow-sm shrink-0">AI</div>
+                        <div class="ml-3 bg-white border border-slate-200 p-3 rounded-2xl rounded-tl-none shadow-sm text-sm text-slate-700 max-w-[85%]">
+                            Hello! Once you upload your spreadsheet and provide your API key, you can ask me questions like:
+                            <ul class="list-disc ml-4 mt-2 text-slate-500">
+                                <li>"What is our total spend on travel?"</li>
+                                <li>"Are there any single transactions over $5,000?"</li>
+                                <li>"Summarize expenditures by category."</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+        
+                <div class="p-3 bg-white border-t border-slate-200 shrink-0">
+                    <div class="flex items-center space-x-2">
+                        <input type="text" id="chatInput" placeholder="Ask a question about your data..." disabled class="flex-grow px-4 py-2 bg-slate-100 border border-slate-200 rounded-full focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm transition disabled:opacity-50 disabled:cursor-not-allowed" onkeypress="handleEnter(event)">
+                        <button id="sendBtn" onclick="sendMessage()" disabled class="bg-blue-600 hover:bg-blue-700 text-white rounded-full p-2 w-10 h-10 flex items-center justify-center transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                            <svg class="w-4 h-4 translate-x-[1px] translate-y-[1px]" fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        
+        </div>
+        </div>
+    </div>
+
+    <script>
+        // Global State
+        let parsedCSVData = ""; // Holds the stringified CSV data for the AI prompt
+        let chatHistory = []; // Holds the conversational turns for Gemini API
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedKey = localStorage.getItem('gemini_api_key');
+            if (savedKey) {
+                document.getElementById('apiKey').value = savedKey;
+            }
+        });
+
+        function saveApiKey() {
+            const key = document.getElementById('apiKey').value.trim();
+            if (key) {
+                localStorage.setItem('gemini_api_key', key);
+                const status = document.getElementById('keyStatus');
+                status.classList.remove('hidden');
+                setTimeout(() => status.classList.add('hidden'), 3000);
+            }
+        }
+
+        // Parse Excel/CSV using SheetJS
+        function processFile() {
+            const fileInput = document.getElementById('fileInput');
+            const btn = document.getElementById('loadDataBtn');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert("Please select a file to upload.");
+                return;
+            }
+
+            const file = fileInput.files[0];
+            btn.innerText = "Processing...";
+            btn.disabled = true;
+
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    
+                    // Get first sheet
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    
+                    // Convert to JSON (array of arrays) for the HTML table display
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+                    
+                    // Convert to CSV string for the AI Context
+                    parsedCSVData = XLSX.utils.sheet_to_csv(worksheet);
+
+                    renderTable(jsonData);
+                    
+                    // Enable chat
+                    document.getElementById('chatInput').disabled = false;
+                    document.getElementById('sendBtn').disabled = false;
+                    document.getElementById('chatInput').placeholder = "Ask a question about the loaded ledger...";
+                    
+                    // Reset styling on button
+                    btn.innerText = "Spreadsheet Loaded ✓";
+                    btn.classList.replace('bg-blue-600', 'bg-emerald-600');
+                    btn.classList.replace('hover:bg-blue-700', 'hover:bg-emerald-700');
+
+                    // Reset chat history when new file loaded
+                    chatHistory = []; 
+
+                } catch (error) {
+                    console.error("Error parsing file:", error);
+                    alert("Error reading file. Ensure it is a valid .xlsx or .csv");
+                    btn.innerText = "Load Spreadsheet";
+                    btn.disabled = false;
+                }
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+
+        function renderTable(dataArray) {
+            document.getElementById('emptyTableState').classList.add('hidden');
+            const table = document.getElementById('dataTable');
+            const thead = document.getElementById('dataHead');
+            const tbody = document.getElementById('dataBody');
+            
+            table.classList.remove('hidden');
+            thead.innerHTML = "";
+            tbody.innerHTML = "";
+
+            if (dataArray.length === 0) return;
+
+            // Render Header (Row 0)
+            const headers = dataArray[0];
+            let headerRow = "<tr>";
+            headers.forEach(h => {
+                headerRow += `<th scope="col" class="px-4 py-2 border-b border-slate-200 whitespace-nowrap">${h || ''}</th>`;
+            });
+            headerRow += "</tr>";
+            thead.innerHTML = headerRow;
+
+            // Render Body (Row 1 to 50 max to prevent UI freezing on huge sets)
+            const rowLimit = Math.min(dataArray.length, 50); 
+            for (let i = 1; i < rowLimit; i++) {
+                const row = dataArray[i];
+                // Skip completely empty rows
+                if (!row || row.length === 0 || row.every(cell => !cell)) continue; 
+
+                let tr = "<tr class='bg-white border-b hover:bg-slate-50'>";
+                for (let j = 0; j < headers.length; j++) {
+                    tr += `<td class="px-4 py-2 whitespace-nowrap border-slate-100 border-r last:border-r-0">${row[j] !== undefined ? row[j] : ''}</td>`;
+                }
+                tr += "</tr>";
+                tbody.innerHTML += tr;
+            }
+
+            // Update stats
+            document.getElementById('fileStats').classList.remove('hidden');
+            document.getElementById('rowCount').innerText = dataArray.length - 1; // minus header
+            document.getElementById('colCount').innerText = headers.length;
+        }
+
+        function handleEnter(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function appendMessage(role, text) {
+            const chatBox = document.getElementById('chatBox');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'flex items-start ' + (role === 'user' ? 'flex-row-reverse' : '');
+
+            let avatar = role === 'user' 
+                ? `<div class="bg-slate-800 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold shadow-sm shrink-0 ml-3">U</div>`
+                : `<div class="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold shadow-sm shrink-0 mr-3">AI</div>`;
+
+            let bubbleClass = role === 'user'
+                ? `bg-blue-50 border border-blue-100 p-3 rounded-2xl rounded-tr-none shadow-sm text-sm text-slate-800 max-w-[85%]`
+                : `bg-white border border-slate-200 p-3 rounded-2xl rounded-tl-none shadow-sm text-sm text-slate-700 max-w-[85%] markdown-body`;
+
+            // If it's AI, parse markdown. If user, just raw text.
+            let content = role === 'user' ? text : marked.parse(text);
+
+            msgDiv.innerHTML = `
+                ${avatar}
+                <div class="${bubbleClass}">${content}</div>
+            `;
+            
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight; // Auto-scroll to bottom
+        }
+
+        function showLoading() {
+            const chatBox = document.getElementById('chatBox');
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'aiLoading';
+            loadingDiv.className = 'flex items-start';
+            loadingDiv.innerHTML = `
+                <div class="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold shadow-sm shrink-0 mr-3">AI</div>
+                <div class="bg-white border border-slate-200 p-3 rounded-2xl rounded-tl-none shadow-sm text-sm text-slate-500 flex space-x-1 items-center">
+                    <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
+                    <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                    <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                </div>
+            `;
+            chatBox.appendChild(loadingDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function removeLoading() {
+            const loading = document.getElementById('aiLoading');
+            if (loading) loading.remove();
+        }
+
+        async function sendMessage() {
+            const inputEl = document.getElementById('chatInput');
+            const userText = inputEl.value.trim();
+            const apiKey = document.getElementById('apiKey').value.trim();
+
+            if (!userText) return;
+            if (!apiKey) {
+                alert("Please enter your Gemini API key first.");
+                return;
+            }
+            if (!parsedCSVData) {
+                alert("Please upload a spreadsheet first.");
+                return;
+            }
+
+            // 1. Display user message
+            appendMessage('user', userText);
+            inputEl.value = '';
+            inputEl.disabled = true;
+            document.getElementById('sendBtn').disabled = true;
+
+            // 2. Add to internal history format for Gemini
+            chatHistory.push({
+                role: "user",
+                parts: [{ text: userText }]
+            });
+
+            showLoading();
+
+            try {
+                // Using gemini-3.1-flash-lite as requested in your previous setup
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`;
+                
+                // We use system_instruction to load the massive spreadsheet CSV securely out of the visual chat history
+                const payload = {
+                    system_instruction: {
+                        parts: [{ text: `You are an expert Post-Award Research Administrator and Financial Analyst. You have been given the following grant/ledger spreadsheet data in CSV format. Analyze it carefully to answer the user's questions. 
+
+                        Spreadsheet Data:
+                        ${parsedCSVData}
+                        
+                        Rules:
+                        1. Provide clear, concise financial answers.
+                        2. If asked to summarize, use Markdown tables.
+                        3. If a column or specific data isn't in the CSV, clearly state that the data doesn't exist. 
+                        4. Format monetary values nicely (e.g., $1,000.00).` }]
+                    },
+                    contents: chatHistory,
+                    generationConfig: {
+                        temperature: 0.1 // Analytical and grounded
+                    }
+                };
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error?.message || "Failed to communicate with the Gemini API.");
+                }
+
+                const aiText = data.candidates[0].content.parts[0].text;
+                
+                removeLoading();
+                appendMessage('model', aiText);
+
+                // Save AI response to history
+                chatHistory.push({
+                    role: "model",
+                    parts: [{ text: aiText }]
+                });
+
+            } catch (error) {
+                console.error("Chat error:", error);
+                removeLoading();
+                appendMessage('model', `**Error:** ${error.message}`);
+                // Remove the failed user message from history so it doesn't break future turns
+                chatHistory.pop(); 
+            } finally {
+                inputEl.disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+                inputEl.focus();
+            }
+        }
+    </script>
+</body>
+</html>
